@@ -1,11 +1,10 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import commands from './commands/commandRegistry';
-
-type CommandsMap = typeof commands;
+import { WebSocketServer } from 'ws';
+import router from './router';
+import { sendJson } from './utils/sendJson';
 
 export type WsRequestData<T = object | string> = {
   id: number;
-  type: keyof CommandsMap;
+  type: string;
   data: T;
 };
 
@@ -22,37 +21,34 @@ export function startWebSocketServer(port: number = 3000) {
     ws.on('error', console.error);
 
     ws.on('message', async (message) => {
-      const parsed: WsRequestData = JSON.parse(message.toString());
-      const command = commands[parsed.type];
+      let parsed: WsRequestData;
 
-      if (!command) {
-        ws.send(
-          JSON.stringify({
-            id: parsed.id,
-            type: 'error',
-            data: { message: 'Unknown command' },
-          }),
-        );
+      try {
+        parsed = JSON.parse(message.toString());
+      } catch (err) {
+        console.error('Failed to parse JSON:', message.toString());
+        sendJson(ws, 'error', 'Invalid JSON');
         return;
       }
 
-      const inputData = JSON.parse(parsed.data.toString());
+      const { type, data } = parsed;
 
-      const result = await command.execute(inputData);
+      const handler = router[type];
+      if (!handler) {
+        console.error(`Unknown command type: ${type}`);
+        sendJson(ws, 'error', `Unknown command: ${type}`);
+        return;
+      }
 
-      sendResponse(ws, parsed.id, parsed.type, result);
+      try {
+        const parsedData = data !== '' ? JSON.parse(data.toString()) : data;
+        await handler(parsedData, ws, wss);
+      } catch (err) {
+        console.error('Handler execution failed:', err);
+        sendJson(ws, 'error', 'Handler failed');
+      }
     });
   });
 
   console.log(`[WS] WebSocket server is running on ws://localhost:${port}`);
-}
-
-function sendResponse(ws: WebSocket, id: number, type: string, data: object) {
-  const response: WsResponseData = {
-    id,
-    type,
-    data: JSON.stringify(data),
-  };
-
-  ws.send(JSON.stringify(response));
 }
