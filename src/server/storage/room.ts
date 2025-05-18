@@ -9,4 +9,3 @@ export type Room = {
 };
 
 export const rooms: Room[] = [];
-export const nextRoomId = 1;
