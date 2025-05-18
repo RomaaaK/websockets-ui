@@ -38,6 +38,7 @@ export function startWebSocketServer(port: number = 3000) {
 
       const handler = router[type];
       if (!handler) {
+        console.log(data);
         console.error(`Unknown command type: ${type}`);
         sendJson(ws, 'error', `Unknown command: ${type}`);
         return;
